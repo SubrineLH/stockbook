@@ -3,7 +3,7 @@ import SwiftUI
 /// 入库 / 出库的填写面板。入库默认带出进价，出库默认带出售价。
 struct StockSheet: View {
     @EnvironmentObject private var store: Store
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.presentationMode) private var presentationMode
 
     let itemID: UUID
     let kind: StockLog.Kind
@@ -84,7 +84,7 @@ struct StockSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("取消") { dismiss() }
+                    Button("取消") { presentationMode.wrappedValue.dismiss() }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("保存") { commit() }
@@ -110,6 +110,6 @@ struct StockSheet: View {
                      quantity: quantity,
                      unitPrice: price,
                      note: note)
-        dismiss()
+        presentationMode.wrappedValue.dismiss()
     }
 }

@@ -47,7 +47,7 @@ struct ItemDetailView: View {
                         Label("入库", systemImage: "arrow.down.circle.fill")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(FilledButtonStyle())
 
                     Button {
                         activeSheet = .outbound(item.id)
@@ -55,7 +55,7 @@ struct ItemDetailView: View {
                         Label("出库", systemImage: "arrow.up.circle.fill")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(OutlineButtonStyle())
                 }
                 .padding(.vertical, 4)
             }

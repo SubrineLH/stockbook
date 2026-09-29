@@ -3,11 +3,6 @@ import SwiftUI
 struct RootView: View {
     @EnvironmentObject private var store: Store
 
-    private var showsError: Binding<Bool> {
-        Binding(get: { store.errorMessage != nil },
-                set: { if !$0 { store.errorMessage = nil } })
-    }
-
     var body: some View {
         TabView {
             NavigationView { ItemListView() }
@@ -22,9 +17,15 @@ struct RootView: View {
                 .navigationViewStyle(StackNavigationViewStyle())
                 .tabItem { Label("设置", systemImage: "gearshape") }
         }
-        .alert("出错了",
-               isPresented: showsError,
-               actions: { Button("知道了", role: .cancel) { } },
-               message: { Text(store.errorMessage ?? "") })
+        .alert(isPresented: showsError) {
+            Alert(title: Text("出错了"),
+                  message: Text(store.errorMessage ?? ""),
+                  dismissButton: .default(Text("知道了")))
+        }
+    }
+
+    private var showsError: Binding<Bool> {
+        Binding(get: { store.errorMessage != nil },
+                set: { if !$0 { store.errorMessage = nil } })
     }
 }

@@ -18,6 +18,10 @@ struct ItemListView: View {
     var body: some View {
         List {
             Section {
+                searchField
+            }
+
+            Section {
                 SummaryCard()
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
@@ -41,9 +45,6 @@ struct ItemListView: View {
         }
         .listStyle(.insetGrouped)
         .navigationTitle("库存本")
-        .searchable(text: $keyword,
-                    placement: .navigationBarDrawer(displayMode: .always),
-                    prompt: "搜商品名或分类")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button { showAdd = true } label: {
@@ -65,6 +66,28 @@ struct ItemListView: View {
                 Label("\(store.lowStockItems.count) 项不足",
                       systemImage: "exclamationmark.triangle.fill")
                     .foregroundColor(.orange)
+            }
+        }
+    }
+
+    /// iOS 14 没有 .searchable，自己拼一个搜索框。
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(.secondary)
+
+            TextField("搜商品名或分类", text: $keyword)
+                .autocapitalization(.none)
+                .disableAutocorrection(true)
+
+            if !keyword.isEmpty {
+                Button {
+                    keyword = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(PlainButtonStyle())
             }
         }
     }

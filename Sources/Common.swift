@@ -110,3 +110,29 @@ struct ItemThumbnail: View {
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
+
+/// 主按钮（实心）。iOS 14 没有 .borderedProminent，自己画一个。
+struct FilledButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body.weight(.medium))
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
+            .background(Color.accentColor.opacity(configuration.isPressed ? 0.7 : 1))
+            .foregroundColor(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
+/// 次按钮（浅底）。iOS 14 没有 .bordered，自己画一个。
+struct OutlineButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body.weight(.medium))
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
+            .background(Color.accentColor.opacity(configuration.isPressed ? 0.22 : 0.12))
+            .foregroundColor(.accentColor)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}

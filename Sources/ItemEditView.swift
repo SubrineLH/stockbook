@@ -15,7 +15,7 @@ struct ItemEditView: View {
     }
 
     @EnvironmentObject private var store: Store
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.presentationMode) private var presentationMode
     let mode: Mode
 
     @State private var name: String
@@ -124,7 +124,7 @@ struct ItemEditView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("取消") { dismiss() }
+                    Button("取消") { presentationMode.wrappedValue.dismiss() }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("保存") { save() }
@@ -133,15 +133,8 @@ struct ItemEditView: View {
             }
         }
         .navigationViewStyle(StackNavigationViewStyle())
-        .confirmationDialog("商品照片", isPresented: $showPhotoMenu, titleVisibility: .visible) {
-            if ImagePicker.cameraAvailable {
-                Button("拍一张") { photoSource = .camera }
-            }
-            Button("从相册选") { photoSource = .library }
-            if hasImage {
-                Button("删除照片", role: .destructive) { clearImage() }
-            }
-            Button("取消", role: .cancel) { }
+        .actionSheet(isPresented: $showPhotoMenu) {
+            ActionSheet(title: Text("商品照片"), buttons: photoButtons)
         }
         .sheet(item: $photoSource) { source in
             ImagePicker(source: source == .camera ? .camera : .photoLibrary) { data in
@@ -149,6 +142,20 @@ struct ItemEditView: View {
                 removeImage = false
             }
         }
+    }
+
+    /// iOS 14 没有 .confirmationDialog，用 ActionSheet 代替。
+    private var photoButtons: [ActionSheet.Button] {
+        var buttons: [ActionSheet.Button] = []
+        if ImagePicker.cameraAvailable {
+            buttons.append(.default(Text("拍一张")) { photoSource = .camera })
+        }
+        buttons.append(.default(Text("从相册选")) { photoSource = .library })
+        if hasImage {
+            buttons.append(.destructive(Text("删除照片")) { clearImage() })
+        }
+        buttons.append(.cancel(Text("取消")))
+        return buttons
     }
 
     @ViewBuilder
@@ -252,6 +259,6 @@ struct ItemEditView: View {
             item.note = note
             store.updateItem(item, imageData: imageData, removeImage: removeImage)
         }
-        dismiss()
+        presentationMode.wrappedValue.dismiss()
     }
 }

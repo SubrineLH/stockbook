@@ -53,12 +53,12 @@ struct SettingsView: View {
         .sheet(item: $shareItem) { item in
             ShareSheet(items: [item.url])
         }
-        .alert("确定清空所有流水？", isPresented: $showClearConfirm, actions: {
-            Button("清空", role: .destructive) { store.clearLogs() }
-            Button("取消", role: .cancel) { }
-        }, message: {
-            Text("商品和库存数量不受影响，只是删掉出入库记录。")
-        })
+        .alert(isPresented: $showClearConfirm) {
+            Alert(title: Text("确定清空所有流水？"),
+                  message: Text("商品和库存数量不受影响，只是删掉出入库记录。"),
+                  primaryButton: .destructive(Text("清空")) { store.clearLogs() },
+                  secondaryButton: .cancel(Text("取消")))
+        }
     }
 
     private func infoRow(_ title: String, _ value: String) -> some View {
