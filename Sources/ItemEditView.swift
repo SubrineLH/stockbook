@@ -102,8 +102,8 @@ struct ItemEditView: View {
                             Text("当前库存")
                             Spacer(minLength: 16)
                             Text("\(existingStock)")
+                                .font(.body.monospacedDigit())
                                 .foregroundColor(.secondary)
-                                .monospacedDigit()
                         }
                         Text("改数量请到商品详情页用「入库 / 出库」，流水才对得上。")
                             .font(.footnote)
@@ -210,14 +210,14 @@ struct ItemEditView: View {
     private func moneyField(_ binding: Binding<String>) -> some View {
         TextField("0.00", text: binding)
             .keyboardType(.decimalPad)
-            .monospacedDigit()
+            .font(.body.monospacedDigit())
             .frame(minWidth: 80, alignment: .trailing)
     }
 
     private func intField(_ binding: Binding<String>) -> some View {
         TextField("0", text: binding)
             .keyboardType(.numberPad)
-            .monospacedDigit()
+            .font(.body.monospacedDigit())
             .frame(minWidth: 80, alignment: .trailing)
     }
 

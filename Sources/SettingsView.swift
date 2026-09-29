@@ -66,8 +66,8 @@ struct SettingsView: View {
             Text(title)
             Spacer(minLength: 16)
             Text(value)
+                .font(.body.monospacedDigit())
                 .foregroundColor(.secondary)
-                .monospacedDigit()
         }
     }
 }

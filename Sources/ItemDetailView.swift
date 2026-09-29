@@ -124,13 +124,12 @@ struct ItemDetailView: View {
                     .multilineTextAlignment(.center)
 
                 Text(Fmt.money(item.price))
-                    .font(.title2.weight(.bold))
+                    .font(.title2.weight(.bold).monospacedDigit())
                     .foregroundColor(.accentColor)
-                    .monospacedDigit()
 
                 HStack(spacing: 6) {
                     Text("库存 \(item.stock) \(item.unit)")
-                        .monospacedDigit()
+                        .font(.subheadline.monospacedDigit())
                         .foregroundColor(item.isLow ? .orange : .secondary)
                     if item.isLow {
                         Text("不足")

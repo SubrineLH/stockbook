@@ -35,8 +35,8 @@ struct StockSheet: View {
                                 .font(.headline)
                             Spacer(minLength: 16)
                             Text("存 \(item.stock) \(item.unit)")
+                                .font(.body.monospacedDigit())
                                 .foregroundColor(.secondary)
-                                .monospacedDigit()
                         }
                     }
 
@@ -44,13 +44,13 @@ struct StockSheet: View {
                         FieldRow("数量") {
                             TextField("0", text: $quantityText)
                                 .keyboardType(.numberPad)
-                                .monospacedDigit()
+                                .font(.body.monospacedDigit())
                                 .frame(minWidth: 80, alignment: .trailing)
                         }
                         FieldRow(kind == .inbound ? "进价" : "售价") {
                             TextField("0.00", text: $priceText)
                                 .keyboardType(.decimalPad)
-                                .monospacedDigit()
+                                .font(.body.monospacedDigit())
                                 .frame(minWidth: 80, alignment: .trailing)
                         }
                         FieldRow("备注") {
@@ -65,9 +65,8 @@ struct StockSheet: View {
                                 .foregroundColor(.secondary)
                             Spacer(minLength: 16)
                             Text(Fmt.money(Double(quantity) * price))
-                                .font(.headline)
+                                .font(.headline.monospacedDigit())
                                 .foregroundColor(.accentColor)
-                                .monospacedDigit()
                         }
                         if overdraw {
                             Label("库存只有 \(item.stock)，不够出", systemImage: "exclamationmark.triangle.fill")

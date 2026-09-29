@@ -109,9 +109,8 @@ struct SummaryCard: View {
 
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(Fmt.moneyRound(store.totalValueByPrice))
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
                     .foregroundColor(.accentColor)
-                    .monospacedDigit()
                     .minimumScaleFactor(0.6)
                     .lineLimit(1)
                 Text("全卖完能收")
@@ -138,8 +137,7 @@ struct SummaryCard: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
             Text(value)
-                .font(.callout.weight(.medium))
-                .monospacedDigit()
+                .font(.callout.weight(.medium).monospacedDigit())
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
@@ -169,11 +167,9 @@ struct ItemRow: View {
 
             VStack(alignment: .trailing, spacing: 4) {
                 Text(Fmt.money(item.price))
-                    .font(.callout)
-                    .monospacedDigit()
+                    .font(.callout.monospacedDigit())
                 Text("存 \(item.stock) \(item.unit)")
-                    .font(.caption)
-                    .monospacedDigit()
+                    .font(.caption.monospacedDigit())
                     .foregroundColor(item.isLow ? .orange : .secondary)
             }
         }

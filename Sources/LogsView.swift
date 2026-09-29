@@ -97,13 +97,11 @@ struct LogRow: View {
 
             VStack(alignment: .trailing, spacing: 4) {
                 Text("\(log.kind.sign)\(log.quantity)")
-                    .font(.callout.weight(.medium))
+                    .font(.callout.weight(.medium).monospacedDigit())
                     .foregroundColor(tint)
-                    .monospacedDigit()
                 Text(Fmt.money(log.amount))
-                    .font(.caption)
+                    .font(.caption.monospacedDigit())
                     .foregroundColor(.secondary)
-                    .monospacedDigit()
             }
         }
         .padding(.vertical, 2)
