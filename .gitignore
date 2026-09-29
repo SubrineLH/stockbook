@@ -1,0 +1,14 @@
+# XcodeGen 生成，不入库
+*.xcodeproj
+*.xcworkspace
+
+# 构建产物
+build/
+Payload/
+*.ipa
+DerivedData/
+xcuserdata/
+*.xcuserstate
+
+# macOS
+.DS_Store

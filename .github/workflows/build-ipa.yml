@@ -1,0 +1,56 @@
+name: Build IPA
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: 拉取源码
+        uses: actions/checkout@v4
+
+      - name: 安装 XcodeGen
+        run: brew install xcodegen
+
+      - name: 查看构建环境
+        run: |
+          xcodebuild -version
+          xcodegen --version
+
+      - name: 生成 Xcode 工程
+        run: xcodegen generate
+
+      - name: 编译（不签名）
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project StockBook.xcodeproj \
+            -target StockBook \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: 打包成 ipa
+        run: |
+          set -e
+          APP="build/Build/Products/Release-iphoneos/StockBook.app"
+          test -d "$APP"
+          rm -rf Payload StockBook.ipa
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry StockBook.ipa Payload
+          ls -lh StockBook.ipa
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: StockBook-ipa
+          path: StockBook.ipa
+          if-no-files-found: error
