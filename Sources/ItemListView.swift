@@ -10,7 +10,7 @@ struct ItemListView: View {
         case category(String)
     }
 
-    enum SortMode: String, CaseIterable {
+    enum SortMode: String, CaseIterable, Hashable {
         case recent
         case name
         case stockAsc

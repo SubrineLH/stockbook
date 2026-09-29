@@ -9,12 +9,14 @@ struct ItemDetailView: View {
         case edit(Item)
         case inbound(UUID)
         case outbound(UUID)
+        case count(UUID)
 
         var id: String {
             switch self {
             case .edit(let item): return "edit-\(item.id)"
             case .inbound(let id): return "in-\(id)"
             case .outbound(let id): return "out-\(id)"
+            case .count(let id): return "count-\(id)"
             }
         }
     }
@@ -58,6 +60,15 @@ struct ItemDetailView: View {
                     .buttonStyle(OutlineButtonStyle())
                 }
                 .padding(.vertical, 4)
+
+                Button {
+                    activeSheet = .count(item.id)
+                } label: {
+                    Label("盘点（按实数改库存）", systemImage: "arrow.clockwise")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(OutlineButtonStyle())
+                .padding(.bottom, 4)
             }
 
             if item.hasSourceLink {
@@ -109,6 +120,9 @@ struct ItemDetailView: View {
                     .environmentObject(store)
             case .outbound(let id):
                 StockSheet(itemID: id, kind: .outbound)
+                    .environmentObject(store)
+            case .count(let id):
+                CountSheet(itemID: id)
                     .environmentObject(store)
             }
         }

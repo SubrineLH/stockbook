@@ -9,9 +9,13 @@ struct RootView: View {
                 .navigationViewStyle(StackNavigationViewStyle())
                 .tabItem { Label("库存", systemImage: "shippingbox") }
 
-            NavigationView { LogsView() }
+            NavigationView { BusinessView() }
                 .navigationViewStyle(StackNavigationViewStyle())
-                .tabItem { Label("流水", systemImage: "list.bullet.rectangle") }
+                .tabItem { Label("生意", systemImage: "chart.bar") }
+
+            NavigationView { ContactListView() }
+                .navigationViewStyle(StackNavigationViewStyle())
+                .tabItem { Label("往来", systemImage: "person.2") }
 
             NavigationView { SettingsView() }
                 .navigationViewStyle(StackNavigationViewStyle())

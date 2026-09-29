@@ -119,6 +119,14 @@ struct SettingsView: View {
                 Label("导出流水 CSV", systemImage: "tablecells")
             }
 
+            Button {
+                if let url = store.exportContactsCSV() {
+                    shareItem = ShareItem(url: url)
+                }
+            } label: {
+                Label("导出往来欠款 CSV", systemImage: "tablecells")
+            }
+
             Text("CSV 用 Excel 打开看，中文不会乱码。但它只是一张表，不能导回 App；要恢复数据请用上面的完整备份。")
                 .font(.footnote)
                 .foregroundColor(.secondary)
@@ -143,7 +151,7 @@ struct SettingsView: View {
 
     private var aboutSection: some View {
         Section(header: Text("关于")) {
-            infoRow("版本", "1.1.0")
+            infoRow("版本", "1.2.0")
             Text("数据只存在这台手机上，不联网、不上传。")
                 .font(.footnote)
                 .foregroundColor(.secondary)

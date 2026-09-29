@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// 全部流水，按天分组。从「生意」页点进来。
 struct LogsView: View {
     @EnvironmentObject private var store: Store
 
@@ -26,7 +27,7 @@ struct LogsView: View {
                     Image(systemName: "list.bullet.rectangle")
                         .font(.system(size: 32))
                         .foregroundColor(.secondary)
-                    Text("还没有出入库记录\n在商品详情页点「入库 / 出库」就会记下来")
+                    Text("还没有出入库记录\n在商品详情页点「入库 / 出库 / 盘点」就会记下来")
                         .font(.footnote)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -45,7 +46,8 @@ struct LogsView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("流水")
+        .navigationTitle("全部流水")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func dayHeader(_ group: DayGroup) -> some View {
@@ -63,13 +65,28 @@ struct LogsView: View {
     }
 }
 
-/// 一条流水。列表和详情页共用。
+/// 一条流水。详情页、往来页、流水页共用。
 struct LogRow: View {
+    @EnvironmentObject private var store: Store
     let log: StockLog
     var showsTime: Bool = false
 
+    private var isInbound: Bool { log.kind == .inbound }
+
     private var tint: Color {
-        log.kind == .inbound ? .accentColor : .orange
+        switch log.kind {
+        case .inbound: return .accentColor
+        case .outbound: return .orange
+        case .adjust: return .gray
+        }
+    }
+
+    private var iconName: String {
+        switch log.kind {
+        case .inbound: return "arrow.down"
+        case .outbound: return "arrow.up"
+        case .adjust: return "arrow.clockwise"
+        }
     }
 
     var body: some View {
@@ -78,8 +95,8 @@ struct LogRow: View {
                 Circle()
                     .fill(tint.opacity(0.15))
                     .frame(width: 32, height: 32)
-                Image(systemName: log.kind == .inbound ? "arrow.down" : "arrow.up")
-                    .font(.system(size: 14, weight: .bold))
+                Image(systemName: iconName)
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundColor(tint)
             }
 
@@ -99,9 +116,11 @@ struct LogRow: View {
                 Text("\(log.kind.sign)\(log.quantity)")
                     .font(.callout.weight(.medium).monospacedDigit())
                     .foregroundColor(tint)
-                Text(Fmt.money(log.amount))
-                    .font(.caption.monospacedDigit())
-                    .foregroundColor(.secondary)
+                if log.kind != .adjust {
+                    Text(Fmt.money(log.amount))
+                        .font(.caption.monospacedDigit())
+                        .foregroundColor(.secondary)
+                }
             }
         }
         .padding(.vertical, 2)
@@ -110,8 +129,22 @@ struct LogRow: View {
     private var subtitle: String {
         var parts: [String] = []
         if showsTime { parts.append(Fmt.time(log.date)) }
-        parts.append("\(log.kind.title) @ \(Fmt.money(log.unitPrice))")
-        if !log.note.isEmpty { parts.append(log.note) }
+
+        if log.kind == .adjust {
+            parts.append("盘完 \(log.quantity)")
+        } else {
+            parts.append("\(log.kind.title) @ \(Fmt.money(log.unitPrice))")
+        }
+
+        if let id = log.contactID, let contact = store.contact(id: id) {
+            parts.append(isInbound ? "欠 \(contact.name)" : contact.name)
+        }
+        if log.kind == .outbound && !log.delivered {
+            parts.append("待发货")
+        }
+        if !log.note.isEmpty {
+            parts.append(log.note)
+        }
         return parts.joined(separator: " · ")
     }
 }
