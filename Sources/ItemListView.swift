@@ -31,7 +31,6 @@ struct ItemListView: View {
     @State private var filter: QuickFilter = .all
     @State private var sortMode: SortMode = .recent
     @State private var showScanner = false
-    @State private var scannedItemID: UUID?
 
     private var visibleItems: [Item] {
         var result = store.items
@@ -128,12 +127,9 @@ struct ItemListView: View {
                 .environmentObject(store)
         }
         .sheet(isPresented: $showScanner) {
-            ScanSheet { id in
-                scannedItemID = id
-            }
-            .environmentObject(store)
+            ScanSheet()
+                .environmentObject(store)
         }
-        .background(scanLink)
     }
 
     // MARK: - 顶部
@@ -224,27 +220,6 @@ struct ItemListView: View {
 
     private func delete(at offsets: IndexSet) {
         store.deleteItems(offsets.map { visibleItems[$0].id })
-    }
-
-    // MARK: - 扫码跳转
-
-    /// 扫到自家商品码后，靠这个隐藏的 NavigationLink 把详情页推出来
-    private var scanLink: some View {
-        NavigationLink(destination: scanDestination, isActive: showsScannedItem) {
-            EmptyView()
-        }
-    }
-
-    private var showsScannedItem: Binding<Bool> {
-        Binding(get: { scannedItemID != nil },
-                set: { if !$0 { scannedItemID = nil } })
-    }
-
-    @ViewBuilder
-    private var scanDestination: some View {
-        if let id = scannedItemID {
-            ItemDetailView(itemID: id)
-        }
     }
 }
 

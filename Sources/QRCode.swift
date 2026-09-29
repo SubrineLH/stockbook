@@ -76,6 +76,7 @@ final class QRScannerController: UIViewController, AVCaptureMetadataOutputObject
     private let session = AVCaptureSession()
     private var previewLayer: AVCaptureVideoPreviewLayer?
     private var hasFired = false
+    private var torchIsOn = false
     private let sessionQueue = DispatchQueue(label: "com.family.stockbook.qr")
 
     override func viewDidLoad() {
@@ -114,8 +115,22 @@ final class QRScannerController: UIViewController, AVCaptureMetadataOutputObject
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        setTorch(false)
         sessionQueue.async { [session] in
             if session.isRunning { session.stopRunning() }
+        }
+    }
+
+    func setTorch(_ on: Bool) {
+        guard on != torchIsOn else { return }
+        guard let device = AVCaptureDevice.default(for: .video), device.hasTorch else { return }
+        do {
+            try device.lockForConfiguration()
+            device.torchMode = on ? .on : .off
+            device.unlockForConfiguration()
+            torchIsOn = on
+        } catch {
+            // 手电筒打不开不影响扫码，忽略
         }
     }
 
@@ -134,6 +149,7 @@ final class QRScannerController: UIViewController, AVCaptureMetadataOutputObject
 }
 
 struct QRScannerView: UIViewControllerRepresentable {
+    var torchOn: Bool = false
     let onFound: (String) -> Void
 
     func makeUIViewController(context: Context) -> QRScannerController {
@@ -142,7 +158,9 @@ struct QRScannerView: UIViewControllerRepresentable {
         return controller
     }
 
-    func updateUIViewController(_ uiViewController: QRScannerController, context: Context) {}
+    func updateUIViewController(_ uiViewController: QRScannerController, context: Context) {
+        uiViewController.setTorch(torchOn)
+    }
 }
 
 // MARK: - 商品二维码面板
@@ -276,7 +294,7 @@ struct ItemCodeSheet: View {
         }
     }
 
-    private func currentImageURL() -> URL? {
+    private func makeImageURL() -> URL? {
         guard let image = QRCodes.image(from: codeText, side: 900, padding: 48),
               let data = image.pngData() else { return nil }
         let url = FileManager.default.temporaryDirectory
@@ -296,98 +314,124 @@ struct ItemCodeSheet: View {
     }
 
     private func share() {
-        guard let url = currentImageURL() else { return }
+        guard let url = makeImageURL() else { return }
         shareItem = ShareItem(url: url)
     }
 }
 
-// MARK: - 扫一扫面板
+// MARK: - 扫一扫
 
-/// 扫自家商品码 → 回给调用方一个商品 id；扫到 http 链接 → 直接打开。
+/// 扫自家商品码 / 包装条码 → 直接打开这件商品，后面就能入库出库；
+/// 扫到网址 → 直接打开；扫到别的 → 显示出来。
 struct ScanSheet: View {
     @EnvironmentObject private var store: Store
     @Environment(\.presentationMode) private var presentationMode
 
-    let onItemFound: (UUID) -> Void
-
-    @State private var sessionID = 0
+    @State private var foundItemID: UUID?
     @State private var notice: String?
+    @State private var sessionID = 0
+    @State private var torchOn = false
 
     var body: some View {
         NavigationView {
-            ZStack {
-                QRScannerView(onFound: handle)
-                    .id(sessionID)
-                    .edgesIgnoringSafeArea(.all)
-
-                scannerOverlay
+            Group {
+                if let id = foundItemID {
+                    ItemDetailView(itemID: id)
+                } else {
+                    scannerBody
+                        .navigationTitle("扫一扫")
+                        .navigationBarTitleDisplayMode(.inline)
+                }
             }
-            .navigationTitle("扫一扫")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("关闭") { presentationMode.wrappedValue.dismiss() }
+                    if foundItemID != nil {
+                        Button("继续扫") { resume() }
+                    } else {
+                        Button("关闭") { presentationMode.wrappedValue.dismiss() }
+                    }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("重扫") { restart() }
+                    if foundItemID == nil {
+                        Button {
+                            torchOn.toggle()
+                        } label: {
+                            Image(systemName: torchOn ? "bolt.fill" : "bolt.slash")
+                        }
+                    }
                 }
             }
         }
         .navigationViewStyle(StackNavigationViewStyle())
     }
 
-    private var scannerOverlay: some View {
-        VStack {
-            Spacer()
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.white.opacity(0.9), lineWidth: 3)
-                .frame(width: 240, height: 240)
-            Text("把二维码放进取景框")
-                .font(.footnote)
-                .foregroundColor(.white)
-                .padding(.top, 16)
-            Spacer()
+    private var scannerBody: some View {
+        ZStack {
+            QRScannerView(torchOn: torchOn, onFound: handle)
+                .id(sessionID)
+                .edgesIgnoringSafeArea(.all)
 
-            if let notice = notice {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("扫到的内容")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text(notice)
-                        .font(.footnote)
-                        .lineLimit(4)
-                    HStack(spacing: 12) {
-                        Button("复制") { UIPasteboard.general.string = notice }
-                            .font(.footnote.weight(.medium))
-                        Button("继续扫") { restart() }
-                            .font(.footnote.weight(.medium))
+            VStack {
+                Spacer()
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.white.opacity(0.9), lineWidth: 3)
+                    .frame(width: 240, height: 240)
+                Text("对准商品码或包装条码")
+                    .font(.footnote)
+                    .foregroundColor(.white)
+                    .padding(.top, 16)
+                Spacer()
+
+                if let notice = notice {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("扫到的内容")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text(notice)
+                            .font(.footnote)
+                            .lineLimit(4)
+                        HStack(spacing: 12) {
+                            Button("复制") { UIPasteboard.general.string = notice }
+                                .font(.footnote.weight(.medium))
+                            Button("继续扫") { resume() }
+                                .font(.footnote.weight(.medium))
+                        }
                     }
+                    .padding(16)
+                    .background(Color(UIColor.secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 32)
                 }
-                .padding(16)
-                .background(Color(UIColor.secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .padding(.horizontal, 20)
-                .padding(.bottom, 32)
             }
         }
     }
 
-    private func restart() {
+    private func resume() {
+        foundItemID = nil
         notice = nil
+        torchOn = false
         sessionID += 1
     }
 
     private func handle(_ code: String) {
+        // 1. 自家商品码
         if let id = ItemCode.itemID(from: code) {
             if store.item(id: id) != nil {
-                onItemFound(id)
-                presentationMode.wrappedValue.dismiss()
+                foundItemID = id
             } else {
                 notice = "这个码对应的商品已经不在库存里了。"
             }
             return
         }
 
+        // 2. 商品包装上自带的条码
+        if let matched = store.item(barcode: code) {
+            foundItemID = matched.id
+            return
+        }
+
+        // 3. 网址
         let lower = code.lowercased()
         if lower.hasPrefix("http://") || lower.hasPrefix("https://"),
            let url = Links.url(from: code) {
@@ -396,6 +440,58 @@ struct ScanSheet: View {
             return
         }
 
+        // 4. 其它内容，展示出来让用户自己看
         notice = code
+    }
+}
+
+// MARK: - 只扫一串码（用来填输入框）
+
+struct BarcodeScanSheet: View {
+    @Environment(\.presentationMode) private var presentationMode
+
+    let onCode: (String) -> Void
+
+    @State private var sessionID = 0
+    @State private var torchOn = false
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                QRScannerView(torchOn: torchOn, onFound: { code in
+                    onCode(code)
+                    presentationMode.wrappedValue.dismiss()
+                })
+                .id(sessionID)
+                .edgesIgnoringSafeArea(.all)
+
+                VStack {
+                    Spacer()
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.white.opacity(0.9), lineWidth: 3)
+                        .frame(width: 280, height: 140)
+                    Text("把包装上的条码放进取景框")
+                        .font(.footnote)
+                        .foregroundColor(.white)
+                        .padding(.top, 16)
+                    Spacer()
+                }
+            }
+            .navigationTitle("扫条码")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") { presentationMode.wrappedValue.dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        torchOn.toggle()
+                    } label: {
+                        Image(systemName: torchOn ? "bolt.fill" : "bolt.slash")
+                    }
+                }
+            }
+        }
+        .navigationViewStyle(StackNavigationViewStyle())
     }
 }

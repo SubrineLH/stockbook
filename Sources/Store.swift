@@ -100,9 +100,16 @@ final class Store: ObservableObject {
         items.first { $0.id == id }
     }
 
-    func addItem(_ item: Item, imageData: Data?) {
+    /// 按包装上的条码找货
+    func item(barcode: String) -> Item? {
+        let code = barcode.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !code.isEmpty else { return nil }
+        return items.first { $0.barcode == code }
+    }
+
+    func addItem(_ item: Item, images: [Data]) {
         var newItem = item
-        newItem.imageName = imageData.flatMap { storeImage($0) }
+        newItem.imageNames = images.compactMap { storeImage($0) }
         newItem.createdAt = Date()
         newItem.updatedAt = Date()
         items.insert(newItem, at: 0)
@@ -119,20 +126,21 @@ final class Store: ObservableObject {
         save()
     }
 
-    func updateItem(_ item: Item, imageData: Data?, removeImage: Bool) {
+    /// keepImageNames 是用户保留下来的旧照片，没在里面的一律从磁盘删掉
+    func updateItem(_ item: Item, newImages: [Data], keepImageNames: [String]) {
         guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
         var updated = item
         updated.updatedAt = Date()
 
-        if let data = imageData {
-            if let old = items[index].imageName { deleteImage(old) }
-            updated.imageName = storeImage(data)
-        } else if removeImage {
-            if let old = items[index].imageName { deleteImage(old) }
-            updated.imageName = nil
-        } else {
-            updated.imageName = items[index].imageName
+        for old in items[index].imageNames where !keepImageNames.contains(old) {
+            deleteImage(old)
         }
+
+        var finalNames = keepImageNames
+        for data in newImages {
+            if let name = storeImage(data) { finalNames.append(name) }
+        }
+        updated.imageNames = finalNames
 
         items[index] = updated
         save()
@@ -140,8 +148,8 @@ final class Store: ObservableObject {
 
     func deleteItems(_ ids: [UUID]) {
         for id in ids {
-            if let item = item(id: id), let name = item.imageName {
-                deleteImage(name)
+            if let item = item(id: id) {
+                for name in item.imageNames { deleteImage(name) }
             }
         }
         items.removeAll { ids.contains($0.id) }
@@ -383,9 +391,10 @@ final class Store: ObservableObject {
     func exportBackup() -> URL? {
         var encodedImages: [String: String] = [:]
         for item in items {
-            guard let name = item.imageName, encodedImages[name] == nil else { continue }
-            guard let data = try? Data(contentsOf: imagesURL.appendingPathComponent(name)) else { continue }
-            encodedImages[name] = data.base64EncodedString()
+            for name in item.imageNames where encodedImages[name] == nil {
+                guard let data = try? Data(contentsOf: imagesURL.appendingPathComponent(name)) else { continue }
+                encodedImages[name] = data.base64EncodedString()
+            }
         }
 
         let backup = BackupFile(items: items,

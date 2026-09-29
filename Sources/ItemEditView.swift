@@ -8,10 +8,24 @@ struct ItemEditView: View {
         case edit(Item)
     }
 
-    private enum PhotoSource: String, Identifiable {
+    /// 一张新加进来的照片。用 id 保证列表里的位置稳定，删中间那张不会串位。
+    private struct NewPhoto: Identifiable {
+        let id = UUID()
+        let data: Data
+    }
+
+    private enum ActiveSheet: Identifiable {
         case camera
         case library
-        var id: String { rawValue }
+        case barcode
+
+        var id: String {
+            switch self {
+            case .camera: return "camera"
+            case .library: return "library"
+            case .barcode: return "barcode"
+            }
+        }
     }
 
     @EnvironmentObject private var store: Store
@@ -27,11 +41,11 @@ struct ItemEditView: View {
     @State private var lowStockText: String
     @State private var note: String
     @State private var sourceURL: String
-    @State private var imageData: Data?
-    @State private var keptImageName: String?
-    @State private var removeImage = false
+    @State private var barcode: String
+    @State private var existingImageNames: [String]
+    @State private var newPhotos: [NewPhoto] = []
     @State private var showPhotoMenu = false
-    @State private var photoSource: PhotoSource?
+    @State private var activeSheet: ActiveSheet?
     @State private var pasteHint = ""
 
     init(mode: Mode) {
@@ -47,7 +61,8 @@ struct ItemEditView: View {
             _lowStockText = State(initialValue: "5")
             _note = State(initialValue: "")
             _sourceURL = State(initialValue: "")
-            _keptImageName = State(initialValue: nil)
+            _barcode = State(initialValue: "")
+            _existingImageNames = State(initialValue: [])
         case .edit(let item):
             _name = State(initialValue: item.name)
             _category = State(initialValue: item.category)
@@ -58,7 +73,8 @@ struct ItemEditView: View {
             _lowStockText = State(initialValue: String(item.lowStock))
             _note = State(initialValue: item.note)
             _sourceURL = State(initialValue: item.sourceURL)
-            _keptImageName = State(initialValue: item.imageName)
+            _barcode = State(initialValue: item.barcode)
+            _existingImageNames = State(initialValue: item.imageNames)
         }
     }
 
@@ -72,20 +88,38 @@ struct ItemEditView: View {
         return 0
     }
 
-    private var hasImage: Bool {
-        imageData != nil || (!removeImage && keptImageName != nil)
-    }
+    private var photoCount: Int { existingImageNames.count + newPhotos.count }
 
     var body: some View {
         NavigationView {
             Form {
                 Section(header: Text("商品照片")) {
-                    photoRow
+                    photoStrip
+                    Text(photoHint)
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
                 }
 
                 Section(header: Text("基本信息")) {
                     TextField("商品名称", text: $name)
                     TextField("分类，比如 鲜果 / 粮油", text: $category)
+                }
+
+                Section(header: Text("商品条码")) {
+                    FieldRow("条码") {
+                        TextField("包装上的数字", text: $barcode)
+                            .keyboardType(.numberPad)
+                            .font(.body.monospacedDigit())
+                            .frame(minWidth: 80, alignment: .trailing)
+                    }
+                    Button {
+                        activeSheet = .barcode
+                    } label: {
+                        Label("扫一下包装上的条码", systemImage: "barcode.viewfinder")
+                    }
+                    Text("填了之后，用「扫一扫」扫这个条码就能直接找到这件货。袋装米、饮料这类有正规条码的货最省事。")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
                 }
 
                 Section(header: Text("进货链接")) {
@@ -106,7 +140,7 @@ struct ItemEditView: View {
                             .foregroundColor(.orange)
                     }
 
-                    Text("在 1688 App 里点商品的「分享 → 复制链接」，回来按上面的按钮。以后补货时在商品详情页点一下就能跳过去。")
+                    Text("在 1688 / 淘宝里点商品的「分享 → 复制链接」，回来按上面的按钮。带口令的整段文字也能识别，会自动把网址挑出来。")
                         .font(.footnote)
                         .foregroundColor(.secondary)
                 }
@@ -132,7 +166,7 @@ struct ItemEditView: View {
                                 .font(.body.monospacedDigit())
                                 .foregroundColor(.secondary)
                         }
-                        Text("改数量请到商品详情页用「入库 / 出库」，流水才对得上。")
+                        Text("改数量请到商品详情页用「入库 / 出库 / 盘点」，流水才对得上。")
                             .font(.footnote)
                             .foregroundColor(.secondary)
                     }
@@ -161,13 +195,100 @@ struct ItemEditView: View {
         }
         .navigationViewStyle(StackNavigationViewStyle())
         .actionSheet(isPresented: $showPhotoMenu) {
-            ActionSheet(title: Text("商品照片"), buttons: photoButtons)
+            ActionSheet(title: Text("加一张商品照片"), buttons: photoButtons)
         }
-        .sheet(item: $photoSource) { source in
-            ImagePicker(source: source == .camera ? .camera : .photoLibrary) { data in
-                imageData = data
-                removeImage = false
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .camera:
+                ImagePicker(source: .camera) { data in
+                    newPhotos.append(NewPhoto(data: data))
+                }
+            case .library:
+                ImagePicker(source: .photoLibrary) { data in
+                    newPhotos.append(NewPhoto(data: data))
+                }
+            case .barcode:
+                BarcodeScanSheet { code in
+                    barcode = code
+                }
             }
+        }
+    }
+
+    // MARK: - 照片
+
+    private var photoStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(existingImageNames, id: \.self) { storedName in
+                    photoTile(image: store.image(named: storedName)) {
+                        existingImageNames.removeAll { $0 == storedName }
+                    }
+                }
+                ForEach(newPhotos) { photo in
+                    photoTile(image: UIImage(data: photo.data)) {
+                        newPhotos.removeAll { $0.id == photo.id }
+                    }
+                }
+                addPhotoButton
+            }
+            .padding(.vertical, 4)
+            .padding(.horizontal, 2)
+        }
+    }
+
+    private func photoTile(image: UIImage?, onDelete: @escaping () -> Void) -> some View {
+        ZStack(alignment: .topTrailing) {
+            Group {
+                if let image = image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Color(UIColor.secondarySystemFill)
+                }
+            }
+            .frame(width: 96, height: 96)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            Button(action: onDelete) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(.white)
+                    .shadow(color: Color.black.opacity(0.45), radius: 2)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .padding(4)
+        }
+        .frame(width: 96, height: 96)
+    }
+
+    private var addPhotoButton: some View {
+        Button {
+            showPhotoMenu = true
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: "camera")
+                    .font(.system(size: 22))
+                Text("加照片")
+                    .font(.caption)
+            }
+            .foregroundColor(.secondary)
+            .frame(width: 96, height: 96)
+            .background(Color(UIColor.secondarySystemFill))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    private var photoHint: String {
+        switch photoCount {
+        case 0:
+            return "还没有照片。建议拍两三张：正面、标签、包装。"
+        case 1:
+            return "现在 1 张。第一张会作为列表里的封面，可以再加几张。"
+        default:
+            return "共 \(photoCount) 张，第一张作为列表封面。"
         }
     }
 
@@ -175,55 +296,14 @@ struct ItemEditView: View {
     private var photoButtons: [ActionSheet.Button] {
         var buttons: [ActionSheet.Button] = []
         if ImagePicker.cameraAvailable {
-            buttons.append(.default(Text("拍一张")) { photoSource = .camera })
+            buttons.append(.default(Text("拍一张")) { activeSheet = .camera })
         }
-        buttons.append(.default(Text("从相册选")) { photoSource = .library })
-        if hasImage {
-            buttons.append(.destructive(Text("删除照片")) { clearImage() })
-        }
+        buttons.append(.default(Text("从相册选")) { activeSheet = .library })
         buttons.append(.cancel(Text("取消")))
         return buttons
     }
 
-    @ViewBuilder
-    private var photoRow: some View {
-        Button {
-            showPhotoMenu = true
-        } label: {
-            HStack {
-                Spacer()
-                photoPreview
-                    .frame(width: 160, height: 160)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                Spacer()
-            }
-            .padding(.vertical, 8)
-        }
-        .buttonStyle(.plain)
-    }
-
-    @ViewBuilder
-    private var photoPreview: some View {
-        if let data = imageData, let image = UIImage(data: data) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-        } else if !removeImage, let name = keptImageName, let image = store.image(named: name) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-        } else {
-            VStack(spacing: 8) {
-                Image(systemName: "camera")
-                    .font(.system(size: 28))
-                Text("拍一张商品照片")
-                    .font(.footnote)
-            }
-            .foregroundColor(.secondary)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(UIColor.secondarySystemFill))
-        }
-    }
+    // MARK: - 其它字段
 
     private var profitHint: String {
         let cost = Double(costText) ?? 0
@@ -248,27 +328,29 @@ struct ItemEditView: View {
             .frame(minWidth: 80, alignment: .trailing)
     }
 
-    private func clearImage() {
-        imageData = nil
-        keptImageName = nil
-        removeImage = true
-    }
-
     private func pasteFromClipboard() {
         let text = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !text.isEmpty else {
-            pasteHint = "剪贴板里没有内容。先在 1688 里复制商品链接。"
+            pasteHint = "剪贴板里没有内容。先在 1688 / 淘宝里复制商品链接。"
             return
         }
-        sourceURL = text
-        pasteHint = Links.looksLikeProductLink(text) ? "" : "粘上了，但看着不像商品链接，确认一下对不对。"
+        if let link = Links.firstLink(in: text) {
+            sourceURL = link
+            pasteHint = ""
+        } else {
+            sourceURL = text
+            pasteHint = "没找到网址。淘宝要选「复制链接」，不是「复制口令」。"
+        }
     }
 
     private func save() {
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
         guard !trimmedName.isEmpty else { return }
         let trimmedCategory = category.trimmingCharacters(in: .whitespaces)
-        let trimmedLink = sourceURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        // 贴进来的是整段分享文字也没关系，这里再抠一次网址
+        let link = Links.firstLink(in: sourceURL)
+            ?? sourceURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedBarcode = barcode.trimmingCharacters(in: .whitespaces)
         let cost = Double(costText) ?? 0
         let price = Double(priceText) ?? 0
         let low = Int(lowStockText) ?? 5
@@ -285,8 +367,9 @@ struct ItemEditView: View {
             item.unit = finalUnit
             item.lowStock = low
             item.note = note
-            item.sourceURL = trimmedLink
-            store.addItem(item, imageData: imageData)
+            item.sourceURL = link
+            item.barcode = trimmedBarcode
+            store.addItem(item, images: newPhotos.map { $0.data })
         case .edit(let original):
             var item = original
             item.name = trimmedName
@@ -296,8 +379,11 @@ struct ItemEditView: View {
             item.unit = finalUnit
             item.lowStock = low
             item.note = note
-            item.sourceURL = trimmedLink
-            store.updateItem(item, imageData: imageData, removeImage: removeImage)
+            item.sourceURL = link
+            item.barcode = trimmedBarcode
+            store.updateItem(item,
+                             newImages: newPhotos.map { $0.data },
+                             keepImageNames: existingImageNames)
         }
         presentationMode.wrappedValue.dismiss()
     }

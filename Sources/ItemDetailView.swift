@@ -24,6 +24,7 @@ struct ItemDetailView: View {
     }
 
     @State private var activeSheet: ActiveSheet?
+    @State private var photoIndex = 0
 
     var body: some View {
         Group {
@@ -103,6 +104,10 @@ struct ItemDetailView: View {
                 infoRow("单件利润", Fmt.money(item.profit))
                 infoRow("按售价算的货值", Fmt.money(item.valueByPrice))
                 infoRow("少于多少算不足", "\(item.lowStock) \(item.unit)")
+                infoRow("照片", item.imageNames.isEmpty ? "还没拍" : "\(item.imageNames.count) 张")
+                if !item.barcode.isEmpty {
+                    infoRow("商品条码", item.barcode)
+                }
                 if !item.note.isEmpty {
                     infoRow("备注", item.note)
                 }
@@ -141,25 +146,15 @@ struct ItemDetailView: View {
         }
     }
 
+    /// 当前该显示第几张图（编辑过之后张数可能变少，这里夹一下范围）
+    private func currentPhotoName(_ item: Item) -> String? {
+        guard !item.imageNames.isEmpty else { return nil }
+        return item.imageNames[safe: min(photoIndex, item.imageNames.count - 1)]
+    }
+
     private func header(_ item: Item) -> some View {
         VStack(spacing: 16) {
-            Group {
-                if let image = store.image(named: item.imageName) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    ZStack {
-                        Color(UIColor.secondarySystemFill)
-                        Image(systemName: "shippingbox")
-                            .font(.system(size: 48))
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 200)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            photoViewer(item)
 
             VStack(spacing: 6) {
                 Text(item.name)
@@ -189,6 +184,64 @@ struct ItemDetailView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
+    }
+
+    /// 大图 + 下面的小图条。图片用 scaledToFill 铺满整个框再裁，跟外框严丝合缝。
+    @ViewBuilder
+    private func photoViewer(_ item: Item) -> some View {
+        VStack(spacing: 10) {
+            ZStack {
+                Color(UIColor.secondarySystemFill)
+                if let name = currentPhotoName(item), let image = store.image(named: name) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Image(systemName: "shippingbox")
+                        .font(.system(size: 48))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 240, maxHeight: 240)
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            if item.imageNames.count > 1 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(item.imageNames, id: \.self) { name in
+                            photoThumb(name: name, selected: name == currentPhotoName(item))
+                                .onTapGesture {
+                                    if let index = item.imageNames.firstIndex(of: name) {
+                                        photoIndex = index
+                                    }
+                                }
+                        }
+                    }
+                    .padding(.horizontal, 2)
+                }
+            }
+        }
+    }
+
+    private func photoThumb(name: String, selected: Bool) -> some View {
+        ZStack {
+            Group {
+                if let image = store.image(named: name) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Color(UIColor.secondarySystemFill)
+                }
+            }
+            .frame(width: 52, height: 52)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(selected ? Color.accentColor : Color.clear, lineWidth: 2)
+                .frame(width: 52, height: 52)
+        }
     }
 
     private func infoRow(_ title: String, _ value: String) -> some View {

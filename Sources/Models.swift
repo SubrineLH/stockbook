@@ -15,16 +15,23 @@ struct Item: Identifiable, Codable, Hashable {
     /// 库存少于等于这个数就算不足
     var lowStock: Int = 5
     var note: String = ""
-    /// 图片文件名，实际文件放在 Application Support/StockBook/Images 下
-    var imageName: String? = nil
+    /// 商品照片的文件名，可以有多张；文件放在 Application Support/StockBook/Images 下
+    var imageNames: [String] = []
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
     /// 进货链接，一般是 1688 / 淘宝的商品页
     var sourceURL: String = ""
+    /// 商品包装上自带的条码（69 码等），扫一下就能找到这件货
+    var barcode: String = ""
 
     enum CodingKeys: String, CodingKey {
         case id, name, category, cost, price, stock, unit, lowStock, note
-        case imageName, createdAt, updatedAt, sourceURL
+        case imageNames, createdAt, updatedAt, sourceURL, barcode
+    }
+
+    /// 1.2 及以前只存一张图，字段叫 imageName。留这个 key 专门用来读老数据。
+    enum LegacyKeys: String, CodingKey {
+        case imageName
     }
 
     var isLow: Bool { stock <= lowStock }
@@ -32,6 +39,8 @@ struct Item: Identifiable, Codable, Hashable {
     var valueByCost: Double { cost * Double(stock) }
     var profit: Double { price - cost }
     var hasSourceLink: Bool { !sourceURL.trimmingCharacters(in: .whitespaces).isEmpty }
+    /// 列表缩略图用第一张
+    var coverImageName: String? { imageNames.first }
 }
 
 // 放在 extension 里手写解码器：这样既保留了容错解码（旧数据缺字段也能读），
@@ -50,10 +59,19 @@ extension Item {
         unit = try container.decodeIfPresent(String.self, forKey: .unit) ?? "件"
         lowStock = try container.decodeIfPresent(Int.self, forKey: .lowStock) ?? 5
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
-        imageName = try container.decodeIfPresent(String.self, forKey: .imageName)
+        imageNames = try container.decodeIfPresent([String].self, forKey: .imageNames) ?? []
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
         sourceURL = try container.decodeIfPresent(String.self, forKey: .sourceURL) ?? ""
+        barcode = try container.decodeIfPresent(String.self, forKey: .barcode) ?? ""
+
+        // 老数据只有一张图存在 imageName 里，搬进新的数组
+        if imageNames.isEmpty {
+            let legacy = try decoder.container(keyedBy: LegacyKeys.self)
+            if let old = try legacy.decodeIfPresent(String.self, forKey: .imageName), !old.isEmpty {
+                imageNames = [old]
+            }
+        }
     }
 }
 

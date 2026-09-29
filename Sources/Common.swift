@@ -49,26 +49,56 @@ enum Fmt {
     }
 }
 
-/// 链接处理：用户经常只贴 "detail.1688.com/offer/xxx.html"，得补上协议头才能打开。
+/// 链接处理。淘宝 / 1688 的「分享 → 复制链接」给出来的不是纯网址，而是一段混了
+/// 口令和说明文字的话，所以先得把真正的链接抠出来。
 enum Links {
+
+    /// 从一段话里找出第一个 http(s) 链接
+    static func firstLink(in text: String) -> String? {
+        guard let regex = try? NSRegularExpression(
+            pattern: "https?://[A-Za-z0-9\\-._~:/?#\\[\\]@!$&'()*+,;=%]+") else { return nil }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = regex.firstMatch(in: text, options: [], range: range),
+              let found = Range(match.range, in: text) else { return nil }
+        return String(text[found])
+    }
+
     static func url(from text: String) -> URL? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
+
+        // 夹在一堆文字里的链接，先抠出来
+        if let link = firstLink(in: trimmed) {
+            return URL(string: link)
+        }
+
         let lower = trimmed.lowercased()
         if lower.hasPrefix("http://") || lower.hasPrefix("https://") {
             return URL(string: trimmed)
         }
-        return URL(string: "https://" + trimmed)
+
+        // 用户可能只贴了 detail.1688.com/offer/xxx.html，补个协议头
+        if !trimmed.contains(" "), !trimmed.contains("\n") {
+            return URL(string: "https://" + trimmed)
+        }
+        return nil
     }
 
-    /// 剪贴板里看着像商品链接的，用来做「一键粘贴」的提示
+    /// 剪贴板里像不像电商商品链接
     static func looksLikeProductLink(_ text: String) -> Bool {
         let lower = text.lowercased()
-        guard lower.hasPrefix("http") else { return false }
         return lower.contains("1688.com")
             || lower.contains("taobao.com")
+            || lower.contains("tb.cn")
             || lower.contains("tmall.com")
             || lower.contains("alibaba.com")
+    }
+}
+
+extension Array {
+    /// 越界就返回 nil，省得到处判断
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }
 
@@ -116,7 +146,7 @@ struct ItemThumbnail: View {
 
     var body: some View {
         Group {
-            if let image = store.image(named: item.imageName) {
+            if let image = store.image(named: item.coverImageName) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
