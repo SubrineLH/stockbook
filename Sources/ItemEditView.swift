@@ -26,11 +26,13 @@ struct ItemEditView: View {
     @State private var unit: String
     @State private var lowStockText: String
     @State private var note: String
+    @State private var sourceURL: String
     @State private var imageData: Data?
     @State private var keptImageName: String?
     @State private var removeImage = false
     @State private var showPhotoMenu = false
     @State private var photoSource: PhotoSource?
+    @State private var pasteHint = ""
 
     init(mode: Mode) {
         self.mode = mode
@@ -44,6 +46,7 @@ struct ItemEditView: View {
             _unit = State(initialValue: "件")
             _lowStockText = State(initialValue: "5")
             _note = State(initialValue: "")
+            _sourceURL = State(initialValue: "")
             _keptImageName = State(initialValue: nil)
         case .edit(let item):
             _name = State(initialValue: item.name)
@@ -54,6 +57,7 @@ struct ItemEditView: View {
             _unit = State(initialValue: item.unit)
             _lowStockText = State(initialValue: String(item.lowStock))
             _note = State(initialValue: item.note)
+            _sourceURL = State(initialValue: item.sourceURL)
             _keptImageName = State(initialValue: item.imageName)
         }
     }
@@ -82,6 +86,29 @@ struct ItemEditView: View {
                 Section(header: Text("基本信息")) {
                     TextField("商品名称", text: $name)
                     TextField("分类，比如 鲜果 / 粮油", text: $category)
+                }
+
+                Section(header: Text("进货链接")) {
+                    TextField("粘贴 1688 / 淘宝商品链接", text: $sourceURL)
+                        .keyboardType(.URL)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+
+                    Button {
+                        pasteFromClipboard()
+                    } label: {
+                        Label("从剪贴板粘贴", systemImage: "doc.on.clipboard")
+                    }
+
+                    if !pasteHint.isEmpty {
+                        Text(pasteHint)
+                            .font(.footnote)
+                            .foregroundColor(.orange)
+                    }
+
+                    Text("在 1688 App 里点商品的「分享 → 复制链接」，回来按上面的按钮。以后补货时在商品详情页点一下就能跳过去。")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
                 }
 
                 Section(header: Text("价格")) {
@@ -227,10 +254,21 @@ struct ItemEditView: View {
         removeImage = true
     }
 
+    private func pasteFromClipboard() {
+        let text = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !text.isEmpty else {
+            pasteHint = "剪贴板里没有内容。先在 1688 里复制商品链接。"
+            return
+        }
+        sourceURL = text
+        pasteHint = Links.looksLikeProductLink(text) ? "" : "粘上了，但看着不像商品链接，确认一下对不对。"
+    }
+
     private func save() {
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
         guard !trimmedName.isEmpty else { return }
         let trimmedCategory = category.trimmingCharacters(in: .whitespaces)
+        let trimmedLink = sourceURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let cost = Double(costText) ?? 0
         let price = Double(priceText) ?? 0
         let low = Int(lowStockText) ?? 5
@@ -247,6 +285,7 @@ struct ItemEditView: View {
             item.unit = finalUnit
             item.lowStock = low
             item.note = note
+            item.sourceURL = trimmedLink
             store.addItem(item, imageData: imageData)
         case .edit(let original):
             var item = original
@@ -257,6 +296,7 @@ struct ItemEditView: View {
             item.unit = finalUnit
             item.lowStock = low
             item.note = note
+            item.sourceURL = trimmedLink
             store.updateItem(item, imageData: imageData, removeImage: removeImage)
         }
         presentationMode.wrappedValue.dismiss()

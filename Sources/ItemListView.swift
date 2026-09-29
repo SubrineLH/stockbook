@@ -1,24 +1,77 @@
 import SwiftUI
+import UIKit
 
 struct ItemListView: View {
     @EnvironmentObject private var store: Store
+
+    enum QuickFilter: Hashable {
+        case all
+        case lowStock
+        case category(String)
+    }
+
+    enum SortMode: String, CaseIterable {
+        case recent
+        case name
+        case stockAsc
+        case valueDesc
+
+        var title: String {
+            switch self {
+            case .recent: return "最近改动的排前面"
+            case .name: return "按名称排"
+            case .stockAsc: return "库存少的排前面"
+            case .valueDesc: return "货值高的排前面"
+            }
+        }
+    }
+
     @State private var keyword = ""
     @State private var showAdd = false
+    @State private var filter: QuickFilter = .all
+    @State private var sortMode: SortMode = .recent
 
     private var visibleItems: [Item] {
-        let sorted = store.items.sorted { $0.updatedAt > $1.updatedAt }
-        let trimmed = keyword.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return sorted }
-        return sorted.filter {
-            $0.name.localizedCaseInsensitiveContains(trimmed) ||
-            $0.category.localizedCaseInsensitiveContains(trimmed)
+        var result = store.items
+
+        switch filter {
+        case .all:
+            break
+        case .lowStock:
+            result = result.filter { $0.isLow }
+        case .category(let name):
+            result = result.filter { $0.category == name }
         }
+
+        let trimmed = keyword.trimmingCharacters(in: .whitespaces)
+        if !trimmed.isEmpty {
+            result = result.filter {
+                $0.name.localizedCaseInsensitiveContains(trimmed) ||
+                $0.category.localizedCaseInsensitiveContains(trimmed)
+            }
+        }
+
+        switch sortMode {
+        case .recent:
+            result.sort { $0.updatedAt > $1.updatedAt }
+        case .name:
+            result.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        case .stockAsc:
+            result.sort { $0.stock < $1.stock }
+        case .valueDesc:
+            result.sort { $0.valueByPrice > $1.valueByPrice }
+        }
+        return result
     }
 
     var body: some View {
         List {
             Section {
-                searchField
+                VStack(alignment: .leading, spacing: 10) {
+                    searchField
+                    filterChips
+                }
+                .padding(.vertical, 2)
             }
 
             Section {
@@ -29,7 +82,7 @@ struct ItemListView: View {
 
             if visibleItems.isEmpty {
                 Section {
-                    EmptyHint(hasKeyword: !keyword.trimmingCharacters(in: .whitespaces).isEmpty)
+                    EmptyHint(message: emptyMessage)
                         .listRowBackground(Color.clear)
                 }
             } else {
@@ -46,6 +99,17 @@ struct ItemListView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("库存本")
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Menu {
+                    Picker("排序", selection: $sortMode) {
+                        ForEach(SortMode.allCases, id: \.self) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                }
+            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button { showAdd = true } label: {
                     Image(systemName: "plus")
@@ -58,17 +122,7 @@ struct ItemListView: View {
         }
     }
 
-    private var listHeader: some View {
-        HStack {
-            Text("商品 \(store.items.count) 项")
-            Spacer()
-            if !store.lowStockItems.isEmpty {
-                Label("\(store.lowStockItems.count) 项不足",
-                      systemImage: "exclamationmark.triangle.fill")
-                    .foregroundColor(.orange)
-            }
-        }
-    }
+    // MARK: - 顶部
 
     /// iOS 14 没有 .searchable，自己拼一个搜索框。
     private var searchField: some View {
@@ -89,6 +143,68 @@ struct ItemListView: View {
                 }
                 .buttonStyle(PlainButtonStyle())
             }
+        }
+    }
+
+    private var filterChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                chip(title: "全部", on: filter == .all) {
+                    filter = .all
+                }
+
+                if !store.lowStockItems.isEmpty {
+                    chip(title: "该进货 \(store.lowStockItems.count)", on: filter == .lowStock) {
+                        filter = .lowStock
+                    }
+                }
+
+                ForEach(store.categories, id: \.self) { name in
+                    chip(title: name, on: filter == .category(name)) {
+                        filter = .category(name)
+                    }
+                }
+            }
+            .padding(.vertical, 2)
+        }
+    }
+
+    private func chip(title: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.footnote)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(on ? Color.accentColor : Color(UIColor.secondarySystemFill))
+                .foregroundColor(on ? Color.white : Color.primary)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    private var listHeader: some View {
+        HStack {
+            Text("\(visibleItems.count) 件")
+            Spacer()
+            if filter != .lowStock && !store.lowStockItems.isEmpty {
+                Label("\(store.lowStockItems.count) 件不足",
+                      systemImage: "exclamationmark.triangle.fill")
+                    .foregroundColor(.orange)
+            }
+        }
+    }
+
+    private var emptyMessage: String {
+        if !keyword.trimmingCharacters(in: .whitespaces).isEmpty {
+            return "没找到这个商品"
+        }
+        switch filter {
+        case .lowStock:
+            return "没有要补的货，库存都够"
+        case .category:
+            return "这个分类下还没有商品"
+        case .all:
+            return "还没有商品\n点右上角 + 添加第一件"
         }
     }
 
@@ -157,10 +273,17 @@ struct ItemRow: View {
                 Text(item.name)
                     .font(.body)
                     .lineLimit(1)
-                Text(item.category.isEmpty ? "未分类" : item.category)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    if item.hasSourceLink {
+                        Image(systemName: "link")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    Text(item.category.isEmpty ? "未分类" : item.category)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
             }
 
             Spacer(minLength: 8)
@@ -178,14 +301,14 @@ struct ItemRow: View {
 }
 
 struct EmptyHint: View {
-    let hasKeyword: Bool
+    let message: String
 
     var body: some View {
         VStack(spacing: 8) {
-            Image(systemName: hasKeyword ? "magnifyingglass" : "shippingbox")
+            Image(systemName: "shippingbox")
                 .font(.system(size: 32))
                 .foregroundColor(.secondary)
-            Text(hasKeyword ? "没找到这个商品" : "还没有商品\n点右上角 + 添加第一件")
+            Text(message)
                 .font(.footnote)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)

@@ -59,6 +59,16 @@ final class Store: ObservableObject {
     var totalStockCount: Int { items.reduce(0) { $0 + $1.stock } }
     var lowStockItems: [Item] { items.filter { $0.isLow } }
 
+    /// 用过的分类，给列表页的筛选条用
+    var categories: [String] {
+        var seen = Set<String>()
+        for item in items {
+            let name = item.category.trimmingCharacters(in: .whitespaces)
+            if !name.isEmpty { seen.insert(name) }
+        }
+        return seen.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
     var todayOutAmount: Double {
         let calendar = Calendar.current
         return logs
@@ -157,6 +167,123 @@ final class Store: ObservableObject {
     func clearLogs() {
         logs.removeAll()
         save()
+    }
+
+    // MARK: - 完整备份 / 恢复
+
+    enum ImportMode {
+        /// 只补进备份里有、本机没有的（同 id 比 updatedAt，取新的）
+        case merge
+        /// 清空后整个换成备份里的
+        case replace
+    }
+
+    enum StoreError: LocalizedError {
+        case notABackup
+        case unreadable
+
+        var errorDescription: String? {
+            switch self {
+            case .notABackup: return "这个文件不是库存本的备份文件，请选对文件。"
+            case .unreadable: return "文件打不开，可能没下载完。"
+            }
+        }
+    }
+
+    /// 把商品、流水、图片（转 base64）打包成一个 json 文件，方便微信直接发。
+    func exportBackup() -> URL? {
+        var encodedImages: [String: String] = [:]
+        for item in items {
+            guard let name = item.imageName, encodedImages[name] == nil else { continue }
+            guard let data = try? Data(contentsOf: imagesURL.appendingPathComponent(name)) else { continue }
+            encodedImages[name] = data.base64EncodedString()
+        }
+
+        let backup = BackupFile(items: items, logs: logs, images: encodedImages)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        do {
+            let data = try encoder.encode(backup)
+            let name = "库存本备份-\(Self.fileStamp(Date())).json"
+            let url = fileManager.temporaryDirectory.appendingPathComponent(name)
+            try data.write(to: url, options: .atomic)
+            return url
+        } catch {
+            errorMessage = "导出备份失败：\(error.localizedDescription)"
+            return nil
+        }
+    }
+
+    /// 恢复备份。返回值是给用户看的一句话总结。
+    @discardableResult
+    func importBackup(from url: URL, mode: ImportMode) throws -> String {
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+
+        guard let data = try? Data(contentsOf: url) else { throw StoreError.unreadable }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let backup = try? decoder.decode(BackupFile.self, from: data),
+              backup.format == BackupFile.magic else {
+            throw StoreError.notABackup
+        }
+
+        // 图片先落盘，商品引用的是文件名
+        for (name, base64) in backup.images {
+            guard let imageData = Data(base64Encoded: base64) else { continue }
+            try? imageData.write(to: imagesURL.appendingPathComponent(name), options: .atomic)
+        }
+
+        var touchedItems = 0
+        var touchedLogs = 0
+
+        switch mode {
+        case .replace:
+            items = backup.items
+            logs = backup.logs
+            touchedItems = backup.items.count
+            touchedLogs = backup.logs.count
+
+        case .merge:
+            var byID: [UUID: Item] = [:]
+            for item in items { byID[item.id] = item }
+            for incoming in backup.items {
+                if let current = byID[incoming.id] {
+                    if incoming.updatedAt > current.updatedAt {
+                        byID[incoming.id] = incoming
+                        touchedItems += 1
+                    }
+                } else {
+                    byID[incoming.id] = incoming
+                    touchedItems += 1
+                }
+            }
+            items = Array(byID.values)
+
+            var knownLogIDs = Set(logs.map { $0.id })
+            for log in backup.logs where !knownLogIDs.contains(log.id) {
+                logs.append(log)
+                knownLogIDs.insert(log.id)
+                touchedLogs += 1
+            }
+        }
+
+        imageCache.removeAll()
+        save()
+
+        switch mode {
+        case .replace:
+            return "已恢复 \(items.count) 件商品、\(logs.count) 条流水。"
+        case .merge:
+            return "新增或更新 \(touchedItems) 件商品、\(touchedLogs) 条流水，现在共 \(items.count) 件商品。"
+        }
+    }
+
+    private static func fileStamp(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyyMMdd-HHmm"
+        return formatter.string(from: date)
     }
 
     // MARK: - 图片

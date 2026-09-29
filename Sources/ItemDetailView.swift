@@ -60,6 +60,22 @@ struct ItemDetailView: View {
                 .padding(.vertical, 4)
             }
 
+            if item.hasSourceLink {
+                Section(header: Text("进货链接")) {
+                    Button {
+                        if let url = Links.url(from: item.sourceURL) {
+                            UIApplication.shared.open(url, options: [:], completionHandler: nil)
+                        }
+                    } label: {
+                        Label("去 1688 打开这个货", systemImage: "link")
+                    }
+                    Text(item.sourceURL)
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                }
+            }
+
             Section(header: Text("信息")) {
                 infoRow("分类", item.category.isEmpty ? "未分类" : item.category)
                 infoRow("进价", Fmt.money(item.cost))

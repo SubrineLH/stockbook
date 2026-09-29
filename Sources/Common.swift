@@ -49,6 +49,29 @@ enum Fmt {
     }
 }
 
+/// 链接处理：用户经常只贴 "detail.1688.com/offer/xxx.html"，得补上协议头才能打开。
+enum Links {
+    static func url(from text: String) -> URL? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let lower = trimmed.lowercased()
+        if lower.hasPrefix("http://") || lower.hasPrefix("https://") {
+            return URL(string: trimmed)
+        }
+        return URL(string: "https://" + trimmed)
+    }
+
+    /// 剪贴板里看着像商品链接的，用来做「一键粘贴」的提示
+    static func looksLikeProductLink(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        guard lower.hasPrefix("http") else { return false }
+        return lower.contains("1688.com")
+            || lower.contains("taobao.com")
+            || lower.contains("tmall.com")
+            || lower.contains("alibaba.com")
+    }
+}
+
 /// 白底圆角卡片，全局统一。
 struct CardBackground: ViewModifier {
     func body(content: Content) -> some View {
