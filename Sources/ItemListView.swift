@@ -27,10 +27,24 @@ struct ItemListView: View {
     }
 
     @State private var keyword = ""
-    @State private var showAdd = false
     @State private var filter: QuickFilter = .all
     @State private var sortMode: SortMode = .recent
-    @State private var showScanner = false
+
+    /// 注意：iOS 14 同一个视图上挂多个 .sheet 只有最后一个生效，
+    /// 所以「加商品」和「扫一扫」必须合成一个 sheet，别拆成两个。
+    private enum ActiveSheet: Identifiable {
+        case add
+        case scanner
+
+        var id: String {
+            switch self {
+            case .add: return "add"
+            case .scanner: return "scanner"
+            }
+        }
+    }
+
+    @State private var activeSheet: ActiveSheet?
 
     private var visibleItems: [Item] {
         var result = store.items
@@ -102,7 +116,7 @@ struct ItemListView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 HStack(spacing: 18) {
-                    Button { showScanner = true } label: {
+                    Button { activeSheet = .scanner } label: {
                         Image(systemName: "qrcode.viewfinder")
                     }
                     Menu {
@@ -117,16 +131,23 @@ struct ItemListView: View {
                 }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button { showAdd = true } label: {
+                Button { activeSheet = .add } label: {
                     Image(systemName: "plus")
                 }
             }
         }
-        .sheet(isPresented: $showAdd) {
+        .sheet(item: $activeSheet) { sheet in
+            sheetContent(for: sheet)
+        }
+    }
+
+    @ViewBuilder
+    private func sheetContent(for sheet: ActiveSheet) -> some View {
+        switch sheet {
+        case .add:
             ItemEditView(mode: .create)
                 .environmentObject(store)
-        }
-        .sheet(isPresented: $showScanner) {
+        case .scanner:
             ScanSheet()
                 .environmentObject(store)
         }
