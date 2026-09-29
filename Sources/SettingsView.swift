@@ -151,7 +151,7 @@ struct SettingsView: View {
 
     private var aboutSection: some View {
         Section(header: Text("关于")) {
-            infoRow("版本", "1.2.0")
+            infoRow("版本", "1.3.0")
             Text("数据只存在这台手机上，不联网、不上传。")
                 .font(.footnote)
                 .foregroundColor(.secondary)

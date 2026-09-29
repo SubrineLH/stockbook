@@ -97,7 +97,7 @@ struct ItemListView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("库存本")
+        .navigationTitle("StockBook")
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Menu {
