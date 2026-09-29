@@ -23,6 +23,9 @@ jobs:
       - name: 生成 Xcode 工程
         run: xcodegen generate
 
+      - name: 查看工程里的 target 和 scheme
+        run: xcodebuild -project StockBook.xcodeproj -list
+
       - name: 编译（不签名）
         run: |
           set -o pipefail
@@ -31,7 +34,7 @@ jobs:
             -target StockBook \
             -sdk iphoneos \
             -configuration Release \
-            -derivedDataPath build \
+            CONFIGURATION_BUILD_DIR="$PWD/build/out" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
@@ -40,7 +43,7 @@ jobs:
       - name: 打包成 ipa
         run: |
           set -e
-          APP="build/Build/Products/Release-iphoneos/StockBook.app"
+          APP="build/out/StockBook.app"
           test -d "$APP"
           rm -rf Payload StockBook.ipa
           mkdir -p Payload
