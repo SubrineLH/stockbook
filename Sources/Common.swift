@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// 金额和日期的统一格式，别在各处各写一遍。
 enum Fmt {
