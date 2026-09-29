@@ -30,6 +30,8 @@ struct ItemListView: View {
     @State private var showAdd = false
     @State private var filter: QuickFilter = .all
     @State private var sortMode: SortMode = .recent
+    @State private var showScanner = false
+    @State private var scannedItemID: UUID?
 
     private var visibleItems: [Item] {
         var result = store.items
@@ -100,14 +102,19 @@ struct ItemListView: View {
         .navigationTitle("StockBook")
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Menu {
-                    Picker("排序", selection: $sortMode) {
-                        ForEach(SortMode.allCases, id: \.self) { mode in
-                            Text(mode.title).tag(mode)
-                        }
+                HStack(spacing: 18) {
+                    Button { showScanner = true } label: {
+                        Image(systemName: "qrcode.viewfinder")
                     }
-                } label: {
-                    Image(systemName: "arrow.up.arrow.down")
+                    Menu {
+                        Picker("排序", selection: $sortMode) {
+                            ForEach(SortMode.allCases, id: \.self) { mode in
+                                Text(mode.title).tag(mode)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "arrow.up.arrow.down")
+                    }
                 }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -120,6 +127,13 @@ struct ItemListView: View {
             ItemEditView(mode: .create)
                 .environmentObject(store)
         }
+        .sheet(isPresented: $showScanner) {
+            ScanSheet { id in
+                scannedItemID = id
+            }
+            .environmentObject(store)
+        }
+        .background(scanLink)
     }
 
     // MARK: - 顶部
@@ -210,6 +224,27 @@ struct ItemListView: View {
 
     private func delete(at offsets: IndexSet) {
         store.deleteItems(offsets.map { visibleItems[$0].id })
+    }
+
+    // MARK: - 扫码跳转
+
+    /// 扫到自家商品码后，靠这个隐藏的 NavigationLink 把详情页推出来
+    private var scanLink: some View {
+        NavigationLink(destination: scanDestination, isActive: showsScannedItem) {
+            EmptyView()
+        }
+    }
+
+    private var showsScannedItem: Binding<Bool> {
+        Binding(get: { scannedItemID != nil },
+                set: { if !$0 { scannedItemID = nil } })
+    }
+
+    @ViewBuilder
+    private var scanDestination: some View {
+        if let id = scannedItemID {
+            ItemDetailView(itemID: id)
+        }
     }
 }
 

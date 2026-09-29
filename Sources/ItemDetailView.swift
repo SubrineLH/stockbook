@@ -10,6 +10,7 @@ struct ItemDetailView: View {
         case inbound(UUID)
         case outbound(UUID)
         case count(UUID)
+        case code(UUID)
 
         var id: String {
             switch self {
@@ -17,6 +18,7 @@ struct ItemDetailView: View {
             case .inbound(let id): return "in-\(id)"
             case .outbound(let id): return "out-\(id)"
             case .count(let id): return "count-\(id)"
+            case .code(let id): return "code-\(id)"
             }
         }
     }
@@ -87,6 +89,14 @@ struct ItemDetailView: View {
                 }
             }
 
+            Section {
+                Button {
+                    activeSheet = .code(item.id)
+                } label: {
+                    Label("商品二维码（可打印贴货架）", systemImage: "qrcode")
+                }
+            }
+
             Section(header: Text("信息")) {
                 infoRow("分类", item.category.isEmpty ? "未分类" : item.category)
                 infoRow("进价", Fmt.money(item.cost))
@@ -123,6 +133,9 @@ struct ItemDetailView: View {
                     .environmentObject(store)
             case .count(let id):
                 CountSheet(itemID: id)
+                    .environmentObject(store)
+            case .code(let id):
+                ItemCodeSheet(itemID: id)
                     .environmentObject(store)
             }
         }
